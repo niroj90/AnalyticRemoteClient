@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Data;
 using System.Data.Entity;
 using System.Data.Entity.Core.Objects;
 using System.Data.SqlClient;
 using System.Linq;
+using System.Net.Http;
 using System.Reflection;
 using Abp.Dependency;
 using Abp.Domain.Repositories;
@@ -20,83 +22,41 @@ namespace AbpEfConsoleApp
     {
         public ILogger Logger { get; set; }
 
-        private readonly IRepository<ConnectionString,long> _connectionstringRepository;
-        private readonly IRepository<TableReference, long> _tableReferenceRepository;
-        private readonly IRepository<Analytics, long> _analyticsRepository;
-        private readonly IUnitOfWorkManager _unitOfWorkManager;
-
-        public Tester(IRepository<ConnectionString, long> connectionstringRepository,
-            IUnitOfWorkManager unitOfWorkManager,
-            IRepository<TableReference, long> tableReferenceRepository,
-            IRepository<Analytics, long> analyticsRepository)
+        public Tester()
         {
-            _connectionstringRepository = connectionstringRepository;
-            _unitOfWorkManager = unitOfWorkManager;
-            _tableReferenceRepository = tableReferenceRepository;
-            _analyticsRepository = analyticsRepository;
-
-
             Logger = NullLogger.Instance;
         }
 
         public void Run()
         {
             Logger.Debug("Started Tester.Run()");
-
-            
         }
 
 
-        public void StartSharding( string dbname,DateTime from,DateTime to)
+        public void StartSharding(DateTime from,DateTime to)
         {
-            if (!string.IsNullOrEmpty(dbname))
+            Console.WriteLine("Starting the sharding process");
+            string connectionString = string.Empty;
+            try
             {
-                Console.WriteLine("Starting the sharding operation for database :"+dbname);
-                string connectionString = string.Empty;
-                using (var uow = _unitOfWorkManager.Begin(System.Transactions.TransactionScopeOption.RequiresNew))
+                connectionString = ConfigurationManager.ConnectionStrings["Default"].ConnectionString;
+                if (!string.IsNullOrEmpty(connectionString))
                 {
-                    try
-                    {
-                        Console.WriteLine("Getting Connection string value for database :" + dbname);
-                        var conStrRecord= _connectionstringRepository.GetAll().Where(x => x.DatabaseName.ToLower() == dbname.ToLower()).FirstOrDefault();
-                        if (conStrRecord!=null && !string.IsNullOrEmpty(conStrRecord.ConnectionStringValue))
-                        {
-                            Console.WriteLine("Connection string value found for database :" + dbname);
-                            connectionString = conStrRecord.ConnectionStringValue;
-                            Console.WriteLine("Getting table reference for database :" + dbname);
-                            var columnsDetails = _tableReferenceRepository.GetAll().Where(x => x.ConnectionStringId == conStrRecord.Id);
-                            if (columnsDetails!=null && columnsDetails.Count()>0)
-                            {
-                                Console.WriteLine("Getting table reference found for database :" + dbname);
-                                string organizationIdColumn = columnsDetails.Where(x => x.ColumnName.ToLower() == AnalyticsConsts.ColumnNames.OrganizationId).FirstOrDefault().MappedColumnName;
-                                string departmentIdColumn = columnsDetails.Where(x => x.ColumnName.ToLower() == AnalyticsConsts.ColumnNames.DepartmentId).FirstOrDefault().MappedColumnName;
-                                string earningColumn = columnsDetails.Where(x => x.ColumnName.ToLower() == AnalyticsConsts.ColumnNames.Earning).FirstOrDefault().MappedColumnName;
-
-                                string dailyQuery = GetQueryForDaily(organizationIdColumn, departmentIdColumn, earningColumn, from, to);
-                                DataTable dailyDatatable = GetRecords(connectionString, dailyQuery);
-                                ShardData(dailyDatatable,Periodicity.Daily, conStrRecord.Id);
-                            }
-                            else
-                            {
-                                Console.WriteLine("No column reference found for the dbname :" + dbname);
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine("No connection string found for the dbname :" +dbname);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-
-                        Console.WriteLine("Exception happens while getting connection string from db" + ex.Message);
-                    }
-                    uow.Complete();
+                    string dailyQuery = GetQueryForDaily(from, to);
+                    DataTable dailyDatatable = GetRecords(connectionString, dailyQuery);
+                    long remoteClientId = 1;
+                    ShardData(dailyDatatable, Periodicity._1, remoteClientId);
                 }
+                else
+                {
+                    Console.WriteLine("Connection string not found.Aborting...");
+                }
+
             }
-            else
+            catch (Exception ex)
             {
-                Console.WriteLine("Dbname is empty.Aborting the sharding operation");
+
+                Console.WriteLine("Exception happens while getting connection string from db" + ex.Message);
             }
         }
 
@@ -129,15 +89,22 @@ namespace AbpEfConsoleApp
             return recDataTable;
         }
 
-        private string GetQueryForDaily(string organizationColumn,string departmentColum,string earningColumn,DateTime from,DateTime to)
+        private string GetQueryForDaily(DateTime from,DateTime to)
         {
-            string query = @"select max("+ organizationColumn + @") as OrganizationId,max("+ departmentColum + @") as DepartmentId,max(Date) as Date, SUM("+ earningColumn + @") as Sum, AVG("+ earningColumn + @") as Average, COUNT(*) as Count
-                            from Revenues
-                            group by Date";
+            string query = @"select 
+                                MAX(Organizations.Id) as OrganizationId,
+                                MAX(Organizations.DisplayName) as OrganizationName,
+                                MAX(Departments.Id) as DepartmentId, 
+                                MAX(Departments.DisplayName) as DepartmentName,
+                                max(Date) as Date, SUM(Earning) as Sum, AVG(Earning) as Average, COUNT(*) as Count
+                                from Revenues
+                                inner join Departments on Revenues.DepartmentId = Departments.Id
+                                inner join Organizations on Departments.OrganizationId = Organizations.Id
+                                group by Date";
             return query;
         }
 
-        private bool ShardData(DataTable dt, Periodicity periodicity,long connectionStringId)
+        private bool ShardData(DataTable dt, Periodicity periodicity,long remoteClientId)
         {
             bool isSuccessFull = false;
             try
@@ -146,29 +113,15 @@ namespace AbpEfConsoleApp
                 {
                     for (int i = 0; i < dt.Rows.Count; i++)
                     {
-                        var analyticData = MapList<Analytics>(dt.Rows[i]);
+                        var analyticData = MapList<AnalyticsInputDto>(dt.Rows[i]);
+                        analyticData.RemoteClientId = remoteClientId;
                         analyticData.Periodicity = periodicity;
-                        analyticData.ConnectionStringId = connectionStringId;
-                        analyticData.CreationTime = DateTime.Now;
-                        var existingRecord = _analyticsRepository.GetAll().Where(x => x.ConnectionStringId == connectionStringId
-                                            && x.Periodicity == periodicity
-                                            && DbFunctions.TruncateTime(x.Date) == analyticData.Date.Date
-                                            && x.OrganizationId == analyticData.OrganizationId
-                                            && x.DepartmentId == analyticData.DepartmentId).FirstOrDefault();
-                        if (existingRecord==null)
-                        {
-                            _analyticsRepository.Insert(analyticData);
-                            Console.WriteLine($"Inserting analytic record for ConnectionStringId:{connectionStringId} OrganizationId:{analyticData.OrganizationId} DepartmentId:{analyticData.DepartmentId} Periodicity:{periodicity.ToString()} Date:{analyticData.Date.ToString()}");
-                        }
-                        else
-                        {
-                            existingRecord.Sum = analyticData.Sum;
-                            existingRecord.Average = analyticData.Average;
-                            existingRecord.Count = analyticData.Count;
-                            existingRecord.LastModificationTime = DateTime.Now;
-                            _analyticsRepository.Update(existingRecord);
-                            Console.WriteLine($"Updating analytic record for ConnectionStringId:{connectionStringId} OrganizationId:{analyticData.OrganizationId} DepartmentId:{analyticData.DepartmentId} Periodicity:{periodicity.ToString()} Date:{analyticData.Date.ToString()}");
-                        }
+                        analyticData.Average =Convert.ToDouble(dt.Rows[i]["Average"]);
+                        analyticData.Sum = Convert.ToDouble(dt.Rows[i]["Sum"]);
+                        analyticData.Count = Convert.ToInt32(dt.Rows[i]["Count"]);
+                        analyticData.Date = Convert.ToDateTime(dt.Rows[i]["Date"]);
+                        SendDataToServer(analyticData);
+
                     }
                 }
             }
@@ -206,6 +159,22 @@ namespace AbpEfConsoleApp
             }
 
             return result;
+        }
+
+        private void SendDataToServer(AnalyticsInputDto input)
+        {
+            var httpClient = new HttpClient();
+            var client = new Client("http://localhost:21021/", httpClient);
+            try
+            {
+                client.CreateOrUpdateAsync(input);
+                
+            }
+            catch (Exception ex)
+            {
+
+                throw;
+            }
         }
 
     }

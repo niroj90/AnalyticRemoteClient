@@ -102,7 +102,9 @@
     <Reference Include="System.ComponentModel.DataAnnotations" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Net.Http" />
     <Reference Include="System.Runtime.Caching" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Transactions" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -112,22 +114,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AnalyticsConsts.cs" />
+    <Compile Include="ApiClient\ApiclientProxy.cs" />
     <Compile Include="Entities\Analytics.cs" />
-    <Compile Include="Entities\ConnectionString.cs" />
-    <Compile Include="Entities\TableReference.cs" />
     <Compile Include="Enums\Periodicity.cs" />
-    <Compile Include="Migrations\201912260726402_Connection string entity added.cs" />
-    <Compile Include="Migrations\201912260726402_Connection string entity added.Designer.cs">
-      <DependentUpon>201912260726402_Connection string entity added.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Migrations\201912260729034_Analytics entity added.cs" />
-    <Compile Include="Migrations\201912260729034_Analytics entity added.Designer.cs">
-      <DependentUpon>201912260729034_Analytics entity added.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Migrations\201912260730551_TableReference entity added.cs" />
-    <Compile Include="Migrations\201912260730551_TableReference entity added.Designer.cs">
-      <DependentUpon>201912260730551_TableReference entity added.cs</DependentUpon>
-    </Compile>
     <Compile Include="Migrations\Configuration.cs" />
     <Compile Include="MyConsoleAppDbContext.cs" />
     <Compile Include="MyConsoleAppModule.cs" />
@@ -143,17 +132,6 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Migrations\201912260726402_Connection string entity added.resx">
-      <DependentUpon>201912260726402_Connection string entity added.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Migrations\201912260729034_Analytics entity added.resx">
-      <DependentUpon>201912260729034_Analytics entity added.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Migrations\201912260730551_TableReference entity added.resx">
-      <DependentUpon>201912260730551_TableReference entity added.cs</DependentUpon>
-    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />

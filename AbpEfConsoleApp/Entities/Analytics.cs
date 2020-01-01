@@ -9,18 +9,17 @@ using System.Threading.Tasks;
 
 namespace AbpEfConsoleApp.Entities
 {
-    public class Analytics : FullAuditedEntity<long>
+    public class Analytics 
     {
-        [ForeignKey("ConnectionString")]
-        public long ConnectionStringId { get; set; }
+        public long RemoteClientId { get; set; }
         public long OrganizationId { get; set; }
+        public string OrganizationName { get; set; }
         public long DepartmentId { get; set; }
+        public string DepartmentName { get; set; }
         public Periodicity Periodicity { get; set; }
         public DateTime Date { get; set; }
         public decimal Average { get; set; }
         public decimal Sum { get; set; }
         public int Count { get; set; }
-
-        public virtual ConnectionString ConnectionString { get; set; }
     }
 }
