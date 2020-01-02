@@ -44,6 +44,7 @@ namespace AbpEfConsoleApp
                 {
                     string dailyQuery = GetQueryForDaily(from, to);
                     DataTable dailyDatatable = GetRecords(connectionString, dailyQuery);
+                    Console.WriteLine($"{dailyDatatable.Rows.Count} records found");
                     long remoteClientId = 1;
                     ShardData(dailyDatatable, Periodicity._1, remoteClientId);
                 }
@@ -66,14 +67,15 @@ namespace AbpEfConsoleApp
             SqlDataAdapter da = new SqlDataAdapter();
             DataSet recDataSet = new DataSet();
             DataTable recDataTable = new DataTable();
+            SqlConnection connection = new SqlConnection(connectionString);
             try
             {
                 Console.WriteLine("Starting to get records");
-                using (SqlConnection connection = new SqlConnection(connectionString))
+                using (connection)
 
                 {
                     SqlCommand recordsCmd = new SqlCommand(query, connection);
-                    recordsCmd.CommandTimeout = 300;
+                    recordsCmd.CommandTimeout = 3000;
                     connection.Open();
                     da.SelectCommand = recordsCmd;
                     da.Fill(recDataSet,"RevenueTable");
@@ -86,6 +88,10 @@ namespace AbpEfConsoleApp
             {
                 Console.WriteLine("exception happend while getting the records : "+ex.Message);
             }
+            finally
+            {
+                connection.Close();
+            }
             return recDataTable;
         }
 
@@ -96,6 +102,8 @@ namespace AbpEfConsoleApp
                                 MAX(Organizations.DisplayName) as OrganizationName,
                                 MAX(Departments.Id) as DepartmentId, 
                                 MAX(Departments.DisplayName) as DepartmentName,
+                                MAX(CONVERT(int,IsHoliday)) as IsHoliday,
+                                MAX(CONVERT(int,IsRainy)) as IsRainy,
                                 max(Date) as Date, SUM(Earning) as Sum, AVG(Earning) as Average, COUNT(*) as Count
                                 from Revenues
                                 inner join Departments on Revenues.DepartmentId = Departments.Id
@@ -111,11 +119,17 @@ namespace AbpEfConsoleApp
             {
                 if (dt!=null && dt.Rows.Count>0)
                 {
+                    var analyticDataList = new List<AnalyticsInputDto>();
                     for (int i = 0; i < dt.Rows.Count; i++)
                     {
-                        var analyticData = MapList<AnalyticsInputDto>(dt.Rows[i]);
+                        var analyticData = new AnalyticsInputDto();
                         try
                         {
+                            
+                            analyticData.OrganizationId = Convert.ToInt64(dt.Rows[i]["OrganizationId"]);
+                            analyticData.OrganizationName = Convert.ToString(dt.Rows[i]["OrganizationName"]);
+                            analyticData.DepartmentId = Convert.ToInt64(dt.Rows[i]["DepartmentId"]);
+                            analyticData.DepartmentName = Convert.ToString(dt.Rows[i]["DepartmentName"]);
                             analyticData.RemoteClientId = remoteClientId;
                             analyticData.Periodicity = periodicity;
                             analyticData.Average = Convert.ToDouble(dt.Rows[i]["Average"]);
@@ -125,7 +139,7 @@ namespace AbpEfConsoleApp
                             analyticData.IsHoliday = Convert.ToBoolean(dt.Rows[i]["IsHoliday"]);
                             analyticData.IsRainy = Convert.ToBoolean(dt.Rows[i]["IsRainy"]);
                             Console.WriteLine($"Sending data to server for Organization : {analyticData.OrganizationName} Department : {analyticData.DepartmentName} Date : {analyticData.Date}");
-                            SendDataToServer(analyticData);
+                            analyticDataList.Add(analyticData);
                         }
                         catch (Exception ex)
                         {
@@ -134,6 +148,8 @@ namespace AbpEfConsoleApp
                         }
 
                     }
+
+                    SendDataToServer(analyticDataList);
                 }
             }
             catch (Exception ex)
@@ -172,13 +188,13 @@ namespace AbpEfConsoleApp
             return result;
         }
 
-        private void SendDataToServer(AnalyticsInputDto input)
+        private void SendDataToServer(List<AnalyticsInputDto> input)
         {
             var httpClient = new HttpClient();
             var client = new Client("http://localhost:21021/", httpClient);
             try
             {
-                client.CreateOrUpdateAsync(input);
+                client.BatchCreateOrUpdatAsync(input);
                 
             }
             catch (Exception ex)
