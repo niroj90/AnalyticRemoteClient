@@ -2415,6 +2415,12 @@ namespace AbpEfConsoleApp
         [Newtonsoft.Json.JsonProperty("id", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public long Id { get; set; }
 
+        [Newtonsoft.Json.JsonProperty("isHoliday", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public bool IsHoliday { get; set; }
+
+        [Newtonsoft.Json.JsonProperty("isRainy", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public bool IsRainy { get; set; }
+
 
     }
 

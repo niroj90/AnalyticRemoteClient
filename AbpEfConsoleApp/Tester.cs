@@ -114,13 +114,24 @@ namespace AbpEfConsoleApp
                     for (int i = 0; i < dt.Rows.Count; i++)
                     {
                         var analyticData = MapList<AnalyticsInputDto>(dt.Rows[i]);
-                        analyticData.RemoteClientId = remoteClientId;
-                        analyticData.Periodicity = periodicity;
-                        analyticData.Average =Convert.ToDouble(dt.Rows[i]["Average"]);
-                        analyticData.Sum = Convert.ToDouble(dt.Rows[i]["Sum"]);
-                        analyticData.Count = Convert.ToInt32(dt.Rows[i]["Count"]);
-                        analyticData.Date = Convert.ToDateTime(dt.Rows[i]["Date"]);
-                        SendDataToServer(analyticData);
+                        try
+                        {
+                            analyticData.RemoteClientId = remoteClientId;
+                            analyticData.Periodicity = periodicity;
+                            analyticData.Average = Convert.ToDouble(dt.Rows[i]["Average"]);
+                            analyticData.Sum = Convert.ToDouble(dt.Rows[i]["Sum"]);
+                            analyticData.Count = Convert.ToInt32(dt.Rows[i]["Count"]);
+                            analyticData.Date = Convert.ToDateTime(dt.Rows[i]["Date"]);
+                            analyticData.IsHoliday = Convert.ToBoolean(dt.Rows[i]["IsHoliday"]);
+                            analyticData.IsRainy = Convert.ToBoolean(dt.Rows[i]["IsRainy"]);
+                            Console.WriteLine($"Sending data to server for Organization : {analyticData.OrganizationName} Department : {analyticData.DepartmentName} Date : {analyticData.Date}");
+                            SendDataToServer(analyticData);
+                        }
+                        catch (Exception ex)
+                        {
+
+                            Console.WriteLine($"Failed to send data to server for Organization : {analyticData.OrganizationName} Department : {analyticData.DepartmentName} Date : {analyticData.Date}");
+                        }
 
                     }
                 }
